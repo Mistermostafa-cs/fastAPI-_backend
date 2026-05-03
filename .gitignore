@@ -10,3 +10,7 @@ ENV/
 .vscode/
 .idea/
 *.log
+.venv/ 
+.pytest_cache/ 
+.env 
+school.db 
