@@ -1,7 +1,8 @@
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
-from app.db.session import SessionLocal
+from app.db.session import SessionLocal, engine
 from app.db.entities import (
+    Base,
     Role, User, AdminProfile, TeacherProfile, StudentProfile, 
     ParentProfile, ParentStudentLink, AcademicYear, Class, 
     Subject, ClassSubject, Enrollment, Exam, Question, Option,
@@ -10,6 +11,9 @@ from app.db.entities import (
 from app.core.security import hash_password
 
 def seed_data():
+    # Create all tables first
+    Base.metadata.create_all(bind=engine)
+    
     db = SessionLocal()
     try:
         # 0. Metadata (ExamTypes, QuestionTypes)
@@ -204,7 +208,6 @@ def seed_data():
             classes[c_data["name"]] = cls
 
         # 8. ClassSubjects (Assign Teacher)
-        # Math for 10-A
         cs1 = db.query(ClassSubject).filter(
             ClassSubject.ClassID == classes["Grade 10-A"].ClassID,
             ClassSubject.SubjectID == subjects["MATH101"].SubjectID
@@ -221,7 +224,6 @@ def seed_data():
             db.add(cs1)
             db.flush()
 
-        # Science for 10-A
         cs2 = db.query(ClassSubject).filter(
             ClassSubject.ClassID == classes["Grade 10-A"].ClassID,
             ClassSubject.SubjectID == subjects["SCI101"].SubjectID
@@ -279,7 +281,6 @@ def seed_data():
             db.add(exam1)
             db.flush()
             
-            # Add Questions
             q1 = Question(
                 ExamID=exam1.ExamID,
                 QuestionText="What is 2 + 2?",
