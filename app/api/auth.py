@@ -15,8 +15,7 @@ router = APIRouter(prefix="/auth", tags=["Auth"])
 
 @router.post("/login", response_model=TokenResponse)
 def login(
-    username: str = Form(...),
-    password: str = Form(...),
+    payload: LoginRequest,
     db: Session = Depends(get_db)
 ) -> TokenResponse:
     """
@@ -25,15 +24,15 @@ def login(
     Others login using email.
     """
     # Clean input
-    username = username.strip()
+    identifier = payload.email.strip()
     
     # Fetch user by identifier (can be email or student_id)
-    user = user_repo.get_user_by_identifier(db, username)
+    user = user_repo.get_user_by_identifier(db, identifier)
 
     if user is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=f"User not found: {username}",
+            detail=f"User not found: {identifier}",
         )
 
     if not bool(user.IsActive):
@@ -56,20 +55,20 @@ def login(
         # Students must use student_id or student{id} to login
         valid_sid = user.StudentID
         valid_username = f"student{user.StudentID}".lower()
-        if username != valid_sid and username.lower() != valid_username:
+        if identifier != valid_sid and identifier.lower() != valid_username:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail=f"Role mismatch: Student must use ID. Input: {username}",
+                detail=f"Role mismatch: Student must use ID. Input: {identifier}",
             )
     else:
         # Others must use email to login (case-insensitive)
-        if not user.Email or username.lower() != user.Email.lower():
+        if not user.Email or identifier.lower() != user.Email.lower():
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail=f"Role mismatch: {role_name} must use Email. Input: {username}",
+                detail=f"Role mismatch: {role_name} must use Email. Input: {identifier}",
             )
 
-    if not verify_password(password, user.PasswordHash):
+    if not verify_password(payload.password, user.PasswordHash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Password verification failed",
