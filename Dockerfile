@@ -42,4 +42,4 @@ EXPOSE 7860
 
 # Run the app
 # نستخدم port 7860 عشان Hugging Face Spaces يتطلب كده
-CMD ["sh", "-c", "python seed_data.py && uvicorn app.main:app --host 0.0.0.0 --port 7860"]
+CMD ["sh", "-c", "python /app/seed_data.py && uvicorn app.main:app --host 0.0.0.0 --port 7860"]
