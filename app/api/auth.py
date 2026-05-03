@@ -3,19 +3,20 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
-from app.core.security import create_access_token, verify_password
+from app.core.security import create_access_token, verify_password, hash_password
 from app.db.session import get_db
+from app.db.entities import Role
 from app.repositories import users as user_repo
-from app.schemas.auth import AuthUserResponse, TokenResponse, ChangePasswordRequest
+from app.schemas.auth import AuthUserResponse, TokenResponse, ChangePasswordRequest, LoginRequest
 from app.schemas.common import StatusResponse
-from app.core.security import hash_password
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
 
 @router.post("/login", response_model=TokenResponse)
 def login(
-    payload: LoginRequest,
+    email: str = Form(...),
+    password: str = Form(...),
     db: Session = Depends(get_db)
 ) -> TokenResponse:
     """
@@ -24,7 +25,7 @@ def login(
     Others login using email.
     """
     # Clean input
-    identifier = payload.email.strip()
+    identifier = email.strip()
     
     # Fetch user by identifier (can be email or student_id)
     user = user_repo.get_user_by_identifier(db, identifier)
@@ -44,11 +45,9 @@ def login(
     # Role-based identifier validation
     # Ensure role is loaded
     if not user.Role:
-        # Fallback to check role from DB if relationship is not loaded
-        from app.db.entities import Role
         user.Role = db.query(Role).filter(Role.RoleID == user.RoleID).first()
 
-    role_name = user.Role.RoleName if user.Role else ""
+    role_name = user.Role.RoleName if user.Role else "Unknown"
     is_student = role_name == "Student"
     
     if is_student:
@@ -68,34 +67,28 @@ def login(
                 detail=f"Role mismatch: {role_name} must use Email. Input: {identifier}",
             )
 
-    if not verify_password(payload.password, user.PasswordHash):
+    if not verify_password(password, user.PasswordHash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Password verification failed",
         )
 
-    # Force password change check ONLY for students
-    if user.StudentID is not None and user.MustChangePassword:
-        return JSONResponse(
-            status_code=200,
-            content={"status": "PASSWORD_CHANGE_REQUIRED"}
-        )
-
     token = create_access_token(
         subject=str(user.UserID),
-        email=user.Email,
-        role=user.Role.RoleName,
+        email=user.Email or "",
+        role=role_name,
         role_id=user.RoleID,
     )
     user_repo.set_last_login(db, user)
+    
     return TokenResponse(
         access_token=token,
         user_id=user.UserID,
         full_name=f"{user.FirstName} {user.LastName}",
         email=user.Email,
         student_id=user.StudentID,
-        role_name=user.Role.RoleName,
-        must_change_password=False
+        role_name=role_name,
+        must_change_password=bool(user.MustChangePassword)
     )
 
 
@@ -138,7 +131,7 @@ def refresh_token(current_user=Depends(get_current_user)) -> TokenResponse:
 
     token = create_access_token(
         subject=str(current_user.UserID),
-        email=current_user.Email,
+        email=current_user.Email or "",
         role=current_user.Role.RoleName,
         role_id=current_user.RoleID,
     )
@@ -147,5 +140,7 @@ def refresh_token(current_user=Depends(get_current_user)) -> TokenResponse:
         user_id=current_user.UserID,
         full_name=f"{current_user.FirstName} {current_user.LastName}",
         email=current_user.Email,
+        student_id=current_user.StudentID,
         role_name=current_user.Role.RoleName,
+        must_change_password=bool(current_user.MustChangePassword)
     )
