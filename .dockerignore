@@ -36,7 +36,6 @@ check_admin.py
 list_users_debug.py
 reset_passwords.py
 test_*.py
-seed_data.py
 
 # Docker
 Dockerfile
