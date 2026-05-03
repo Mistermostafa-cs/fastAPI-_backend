@@ -33,13 +33,13 @@ def login(
     if user is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid credentials",
+            detail=f"User not found: {username}",
         )
 
     if not bool(user.IsActive):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid credentials",
+            detail="User account is inactive",
         )
 
     # Role-based identifier validation
@@ -59,20 +59,20 @@ def login(
         if username != valid_sid and username.lower() != valid_username:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Students must use Student ID to login",
+                detail=f"Role mismatch: Student must use ID. Input: {username}",
             )
     else:
         # Others must use email to login (case-insensitive)
-        if username.lower() != user.Email.lower():
+        if not user.Email or username.lower() != user.Email.lower():
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Please use email to login",
+                detail=f"Role mismatch: {role_name} must use Email. Input: {username}",
             )
 
     if not verify_password(password, user.PasswordHash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid credentials",
+            detail="Password verification failed",
         )
 
     # Force password change check ONLY for students
