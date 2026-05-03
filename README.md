@@ -1,8 +1,10 @@
---- 
-title: FastAPI Backend 
-emoji: ?? 
-colorFrom: blue 
-colorTo: green 
-sdk: docker 
-pinned: false 
---- 
+---
+title: FastAPI Backend
+emoji: 🚀
+colorFrom: blue
+colorTo: green
+sdk: docker
+pinned: false
+---
+
+# Smart School FastAPI Backend
