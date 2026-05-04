@@ -66,6 +66,32 @@ def seed_data():
             db.add(ay)
             db.flush()
 
+        # 2.5 Admin
+        admin_email = "admin@school.com"
+        admin_user = db.query(User).filter(User.Email == admin_email).first()
+        if not admin_user:
+            admin_user = User(
+                RoleID=roles["Admin"].RoleID,
+                FirstName="System",
+                LastName="Admin",
+                Email=admin_email,
+                PasswordHash=hash_password("Admin@123"),
+                CreatedAt=datetime.now(timezone.utc),
+                UpdatedAt=datetime.now(timezone.utc),
+                IsActive=True,
+                MustChangePassword=False
+            )
+            db.add(admin_user)
+            db.flush()
+            
+            admin_profile = AdminProfile(
+                AdminID=admin_user.UserID,
+                EmployeeCode="ADM001",
+                Department="Management",
+                AccessLevel=1
+            )
+            db.add(admin_profile)
+
         # 3. Teacher
         teacher_email = "teacher@school.com"
         teacher_user = db.query(User).filter(User.Email == teacher_email).first()
