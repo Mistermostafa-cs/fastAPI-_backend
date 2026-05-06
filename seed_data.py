@@ -5,8 +5,7 @@ from app.db.entities import (
     Base,
     Role, User, AdminProfile, TeacherProfile, StudentProfile, 
     ParentProfile, ParentStudentLink, AcademicYear, Class, 
-    Subject, ClassSubject, Enrollment, Exam, Question, Option,
-    ExamType, QuestionType
+    Subject, ClassSubject, Enrollment
 )
 from app.core.security import hash_password
 
@@ -14,29 +13,6 @@ def seed_data():
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
     try:
-        # 0. Metadata (ExamTypes, QuestionTypes)
-        exam_types = [
-            (1, "Quiz"),
-            (2, "Midterm"),
-            (3, "Final"),
-            (4, "Class Test"),
-            (5, "Annual"),
-        ]
-        for tid, name in exam_types:
-            if not db.query(ExamType).filter(ExamType.ExamTypeID == tid).first():
-                db.add(ExamType(ExamTypeID=tid, TypeName=name))
-        
-        q_types = [
-            (1, "MultipleChoice"),
-            (2, "Descriptive"),
-            (3, "TrueFalse"),
-            (4, "FillInBlank"),
-        ]
-        for tid, name in q_types:
-            if not db.query(QuestionType).filter(QuestionType.QuestionTypeID == tid).first():
-                db.add(QuestionType(QuestionTypeID=tid, TypeName=name))
-        db.flush()
-
         # 1. Roles
         roles_data = [
             (1, "Admin", "Full system access"),
@@ -280,48 +256,6 @@ def seed_data():
                     UpdatedAt=datetime.now(timezone.utc)
                 )
                 db.add(enr)
-
-        # 10. Exams
-        exam1 = db.query(Exam).filter(Exam.Title == "Math Quiz 1").first()
-        if not exam1:
-            quiz_type = db.query(ExamType).filter(ExamType.TypeName == "Quiz").first()
-            mcq_type = db.query(QuestionType).filter(QuestionType.TypeName == "MultipleChoice").first()
-            
-            exam1 = Exam(
-                Title="Math Quiz 1",
-                Description="Basic Algebra Quiz",
-                ExamDate=datetime.now(timezone.utc) + timedelta(days=2),
-                DurationMinutes=30,
-                TotalMarks=Decimal("20.00"),
-                PassingMarks=Decimal("10.00"),
-                IsOnline=True,
-                ClassSubjectID=cs1.ClassSubjectID,
-                ExamTypeID=quiz_type.ExamTypeID,
-                CreatedByID=teacher_user.UserID,
-                CreatedAt=datetime.now(timezone.utc),
-                UpdatedAt=datetime.now(timezone.utc)
-            )
-            db.add(exam1)
-            db.flush()
-            
-            q1 = Question(
-                ExamID=exam1.ExamID,
-                QuestionText="What is 2 + 2?",
-                QuestionTypeID=mcq_type.QuestionTypeID,
-                Marks=Decimal("10.00"),
-                QuestionOrder=1,
-                CreatedAt=datetime.now(timezone.utc),
-                UpdatedAt=datetime.now(timezone.utc)
-            )
-            db.add(q1)
-            db.flush()
-            
-            opts = [
-                Option(QuestionID=q1.QuestionID, OptionText="3", IsCorrect=False, OptionOrder=1, CreatedAt=datetime.now(timezone.utc)),
-                Option(QuestionID=q1.QuestionID, OptionText="4", IsCorrect=True, OptionOrder=2, CreatedAt=datetime.now(timezone.utc)),
-                Option(QuestionID=q1.QuestionID, OptionText="5", IsCorrect=False, OptionOrder=3, CreatedAt=datetime.now(timezone.utc)),
-            ]
-            db.add_all(opts)
 
         db.commit()
         print("Successfully seeded sample data!")

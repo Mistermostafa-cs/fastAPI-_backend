@@ -25,7 +25,7 @@ class GradeIn(GradeBase):
     student_id: int
     class_subject_id: int
     academic_year_id: int
-    exam_id: int | None = None
+    assignment_id: int | None = None
     input_by_id: int
     is_passed: bool | None = None
     grade_scale_id: int | None = None
@@ -36,7 +36,7 @@ class GradeOut(GradeBase):
     student_id: int
     class_subject_id: int
     academic_year_id: int
-    exam_id: int | None = None
+    assignment_id: int | None = None
     percentage: Decimal | None = None
     is_passed: bool | None = None
     grade_scale_id: int | None = None

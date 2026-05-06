@@ -19,6 +19,7 @@ class AssignmentOut(AssignmentBase):
     assignment_id: int
     class_subject_id: int
     created_by_id: int
+    file_path: str | None = None
     created_at: datetime
     updated_at: datetime
 

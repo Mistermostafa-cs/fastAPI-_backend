@@ -4,23 +4,18 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Form
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_admin
-from app.db.entities import AcademicYear, Class, ClassSubject, Enrollment, Subject
+from app.api.deps import require_admin, get_current_user
+from app.db.entities import AcademicYear, Class, ClassSubject, Enrollment, Subject, StudentProfile, User
 from app.db.session import get_db
 from app.schemas.academics import (
-    AcademicYearIn,
     AcademicYearOut,
-    ClassIn,
     ClassOut,
-    ClassSubjectIn,
     ClassSubjectOut,
-    EnrollmentIn,
     EnrollmentOut,
-    SubjectIn,
     SubjectOut,
 )
 
-router = APIRouter(prefix="/academics", tags=["Academics"])
+router = APIRouter(prefix="/academic-v2", tags=["Academic V2"])
 
 
 @router.get("/academic-years", response_model=list[AcademicYearOut])
@@ -286,3 +281,42 @@ def create_enrollment(
         enrollment_date=row.EnrollmentDate,
         status=row.Status,
     )
+
+
+@router.get("/student-subjects", response_model=list[SubjectOut])
+def get_student_subjects(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+) -> list[SubjectOut]:
+    # Check if the user is a student
+    student = db.query(StudentProfile).filter(StudentProfile.StudentID == current_user.UserID).first()
+    if not student:
+        raise HTTPException(status_code=404, detail="Student profile not found")
+
+    # Get active enrollment for the student
+    enrollment = db.query(Enrollment).filter(
+        Enrollment.StudentID == student.StudentID,
+        Enrollment.Status == "Active"
+    ).first()
+    
+    if not enrollment:
+        return []
+
+    # Get subjects for the class the student is enrolled in
+    class_subjects = db.query(ClassSubject).filter(
+        ClassSubject.ClassID == enrollment.ClassID
+    ).all()
+
+    subjects = [cs.Subject for cs in class_subjects]
+    
+    return [
+        SubjectOut(
+            subject_id=s.SubjectID,
+            subject_code=s.SubjectCode,
+            subject_name=s.SubjectName,
+            description=s.Description,
+            credit_hours=s.CreditHours,
+            is_elective=s.IsElective
+        )
+        for s in subjects
+    ]

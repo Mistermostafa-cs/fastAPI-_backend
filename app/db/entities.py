@@ -78,9 +78,7 @@ class TeacherProfile(Base):
     Assignments: Mapped[list[Assignment]] = relationship(back_populates="CreatedBy")
     GradedSubmissions: Mapped[list[AssignmentSubmission]] = relationship(back_populates="GradedBy")
     AttendanceMarked: Mapped[list[Attendance]] = relationship(back_populates="MarkedBy")
-    ExamsCreated: Mapped[list[Exam]] = relationship(back_populates="CreatedBy")
     GradesEntered: Mapped[list[Grade]] = relationship(back_populates="InputBy")
-    GradedAnswers: Mapped[list[StudentAnswer]] = relationship(back_populates="GradedBy")
 
 
 class StudentProfile(Base):
@@ -98,7 +96,6 @@ class StudentProfile(Base):
     Enrollments: Mapped[list[Enrollment]] = relationship(back_populates="Student")
     Submissions: Mapped[list[AssignmentSubmission]] = relationship(back_populates="Student")
     Attendance: Mapped[list[Attendance]] = relationship(back_populates="Student")
-    ExamSessions: Mapped[list[ExamSession]] = relationship(back_populates="Student")
     Grades: Mapped[list[Grade]] = relationship(back_populates="Student")
     Parents: Mapped[list[ParentStudentLink]] = relationship(back_populates="Student")
 
@@ -184,7 +181,6 @@ class ClassSubject(Base):
 
     Assignments: Mapped[list[Assignment]] = relationship(back_populates="ClassSubject")
     Attendance: Mapped[list[Attendance]] = relationship(back_populates="ClassSubject")
-    Exams: Mapped[list[Exam]] = relationship(back_populates="ClassSubject")
     Grades: Mapped[list[Grade]] = relationship(back_populates="ClassSubject")
     TeacherProfile: Mapped[TeacherProfile] = relationship(foreign_keys=[TeacherID])
     Subject: Mapped[Subject] = relationship(foreign_keys=[SubjectID])
@@ -212,6 +208,7 @@ class Assignment(Base):
     ClassSubjectID: Mapped[int] = mapped_column(ForeignKey("ClassSubjects.ClassSubjectID"))
     Title: Mapped[str] = mapped_column(String(255))
     Description: Mapped[str | None] = mapped_column(Text)
+    FilePath: Mapped[str | None] = mapped_column(String(500))
     DueDate: Mapped[datetime] = mapped_column(DateTime)
     MaxMarks: Mapped[Decimal] = mapped_column(Numeric(6, 2), default=100.00)
     CreatedByID: Mapped[int] = mapped_column(ForeignKey("TeacherProfiles.TeacherID"))
@@ -262,124 +259,6 @@ class Attendance(Base):
     MarkedBy: Mapped[TeacherProfile] = relationship(back_populates="AttendanceMarked")
 
 
-class ExamType(Base):
-    __tablename__ = "ExamTypes"
-
-    ExamTypeID: Mapped[int] = mapped_column(primary_key=True, autoincrement=False)
-    TypeName: Mapped[str] = mapped_column(String(50))
-
-    Exams: Mapped[list[Exam]] = relationship(back_populates="ExamType")
-
-
-class Exam(Base):
-    __tablename__ = "Exams"
-
-    ExamID: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    ClassSubjectID: Mapped[int] = mapped_column(ForeignKey("ClassSubjects.ClassSubjectID"))
-    ExamTypeID: Mapped[int] = mapped_column(ForeignKey("ExamTypes.ExamTypeID"))
-    Title: Mapped[str] = mapped_column(String(255))
-    Description: Mapped[str | None] = mapped_column(Text)
-    ExamDate: Mapped[datetime] = mapped_column(DateTime)
-    DurationMinutes: Mapped[int] = mapped_column(default=60)
-    TotalMarks: Mapped[Decimal] = mapped_column(Numeric(6, 2), default=100.00)
-    PassingMarks: Mapped[Decimal] = mapped_column(Numeric(6, 2), default=40.00)
-    IsOnline: Mapped[bool] = mapped_column(Boolean, default=True)
-    CreatedByID: Mapped[int] = mapped_column(ForeignKey("TeacherProfiles.TeacherID"))
-    CreatedAt: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    UpdatedAt: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-
-    ClassSubject: Mapped[ClassSubject] = relationship(back_populates="Exams")
-    ExamType: Mapped[ExamType] = relationship(back_populates="Exams")
-    CreatedBy: Mapped[TeacherProfile] = relationship(back_populates="ExamsCreated")
-    Questions: Mapped[list[Question]] = relationship(back_populates="Exam")
-    ExamSessions: Mapped[list[ExamSession]] = relationship(back_populates="Exam")
-    Grades: Mapped[list[Grade]] = relationship(back_populates="Exam")
-
-
-class QuestionType(Base):
-    __tablename__ = "QuestionTypes"
-
-    QuestionTypeID: Mapped[int] = mapped_column(primary_key=True, autoincrement=False)
-    TypeName: Mapped[str] = mapped_column(String(50))
-
-    Questions: Mapped[list[Question]] = relationship(back_populates="QuestionType")
-
-
-class Question(Base):
-    __tablename__ = "Questions"
-
-    QuestionID: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    ExamID: Mapped[int] = mapped_column(ForeignKey("Exams.ExamID"))
-    QuestionTypeID: Mapped[int] = mapped_column(ForeignKey("QuestionTypes.QuestionTypeID"))
-    QuestionText: Mapped[str] = mapped_column(Text)
-    QuestionOrder: Mapped[int] = mapped_column(default=1)
-    Marks: Mapped[Decimal] = mapped_column(Numeric(6, 2), default=1.00)
-    DifficultyLevel: Mapped[int | None]
-    Explanation: Mapped[str | None] = mapped_column(Text)
-    CreatedAt: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    UpdatedAt: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-
-    Exam: Mapped[Exam] = relationship(back_populates="Questions")
-    QuestionType: Mapped[QuestionType] = relationship(back_populates="Questions")
-    Options: Mapped[list[Option]] = relationship(back_populates="Question")
-    StudentAnswers: Mapped[list[StudentAnswer]] = relationship(back_populates="Question")
-
-
-class Option(Base):
-    __tablename__ = "Options"
-
-    OptionID: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    QuestionID: Mapped[int] = mapped_column(ForeignKey("Questions.QuestionID"))
-    OptionText: Mapped[str] = mapped_column(Text)
-    IsCorrect: Mapped[bool] = mapped_column(Boolean, default=False)
-    OptionOrder: Mapped[int] = mapped_column(default=1)
-    CreatedAt: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-
-    Question: Mapped[Question] = relationship(back_populates="Options")
-    StudentAnswers: Mapped[list[StudentAnswer]] = relationship(back_populates="SelectedOption")
-
-
-class ExamSession(Base):
-    __tablename__ = "ExamSessions"
-
-    SessionID: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    ExamID: Mapped[int] = mapped_column(ForeignKey("Exams.ExamID"))
-    StudentID: Mapped[int] = mapped_column(ForeignKey("StudentProfiles.StudentID"))
-    StartedAt: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    SubmittedAt: Mapped[datetime | None] = mapped_column(DateTime)
-    TotalScore: Mapped[Decimal | None] = mapped_column(Numeric(6, 2))
-    IsPassed: Mapped[bool | None] = mapped_column(Boolean)
-    Status: Mapped[str] = mapped_column(String(20), default="InProgress")
-    CreatedAt: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    UpdatedAt: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-
-    Exam: Mapped[Exam] = relationship(back_populates="ExamSessions")
-    Student: Mapped[StudentProfile] = relationship(back_populates="ExamSessions")
-    StudentAnswers: Mapped[list[StudentAnswer]] = relationship(back_populates="Session")
-
-
-class StudentAnswer(Base):
-    __tablename__ = "StudentAnswers"
-
-    AnswerID: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    SessionID: Mapped[int] = mapped_column(ForeignKey("ExamSessions.SessionID"))
-    QuestionID: Mapped[int] = mapped_column(ForeignKey("Questions.QuestionID"))
-    SelectedOptionID: Mapped[int | None] = mapped_column(ForeignKey("Options.OptionID"))
-    AnswerText: Mapped[str | None] = mapped_column(Text)
-    MarksAwarded: Mapped[Decimal | None] = mapped_column(Numeric(6, 2))
-    IsCorrect: Mapped[bool | None] = mapped_column(Boolean)
-    TeacherFeedback: Mapped[str | None] = mapped_column(Text)
-    GradedByID: Mapped[int | None] = mapped_column(ForeignKey("TeacherProfiles.TeacherID"))
-    GradedAt: Mapped[datetime | None] = mapped_column(DateTime)
-    CreatedAt: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    UpdatedAt: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-
-    Session: Mapped[ExamSession] = relationship(back_populates="StudentAnswers")
-    Question: Mapped[Question] = relationship(back_populates="StudentAnswers")
-    SelectedOption: Mapped[Option | None] = relationship(back_populates="StudentAnswers")
-    GradedBy: Mapped[TeacherProfile | None] = relationship(back_populates="GradedAnswers")
-
-
 class GradeScale(Base):
     __tablename__ = "GradeScales"
 
@@ -400,7 +279,7 @@ class Grade(Base):
     StudentID: Mapped[int] = mapped_column(ForeignKey("StudentProfiles.StudentID"))
     ClassSubjectID: Mapped[int] = mapped_column(ForeignKey("ClassSubjects.ClassSubjectID"))
     AcademicYearID: Mapped[int] = mapped_column(ForeignKey("AcademicYears.AcademicYearID"))
-    ExamID: Mapped[int | None] = mapped_column(ForeignKey("Exams.ExamID"))
+    AssignmentID: Mapped[int | None] = mapped_column(ForeignKey("Assignments.AssignmentID"))
     MarksObtained: Mapped[Decimal] = mapped_column(Numeric(6, 2))
     TotalMarks: Mapped[Decimal] = mapped_column(Numeric(6, 2))
     Percentage: Mapped[Decimal | None] = mapped_column(Numeric(5, 2))
@@ -414,7 +293,7 @@ class Grade(Base):
     Student: Mapped[StudentProfile] = relationship(back_populates="Grades")
     ClassSubject: Mapped[ClassSubject] = relationship(back_populates="Grades")
     AcademicYear: Mapped[AcademicYear] = relationship()
-    Exam: Mapped[Exam | None] = relationship(back_populates="Grades")
+    Assignment: Mapped[Assignment | None] = relationship()
     GradeScale: Mapped[GradeScale | None] = relationship(back_populates="Grades")
     InputBy: Mapped[TeacherProfile] = relationship(back_populates="GradesEntered")
 

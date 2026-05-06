@@ -85,7 +85,7 @@ def get_child_grades(
             student_id=g.StudentID,
             class_subject_id=g.ClassSubjectID,
             academic_year_id=g.AcademicYearID,
-            exam_id=g.ExamID,
+            assignment_id=g.AssignmentID,
             marks_obtained=g.MarksObtained,
             total_marks=g.TotalMarks,
             percentage=g.Percentage,

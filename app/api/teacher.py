@@ -2,15 +2,13 @@ from datetime import datetime, timezone
 from typing import List, Optional
 from decimal import Decimal
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 
 from app.api.deps import require_teacher
 from app.db.entities import (
-    Exam,
-    Question,
-    Option,
     Attendance,
     Grade,
     ClassSubject,
@@ -22,7 +20,7 @@ from app.db.entities import (
     AssignmentSubmission,
 )
 from app.db.session import get_db
-from app.schemas.exams import ExamOut, ExamIn, QuestionIn
+from app.schemas.assignments import AssignmentOut, AssignmentSubmissionOut
 from app.schemas.attendance import AttendanceOut, AttendanceIn
 from app.schemas.grades import GradeOut, GradeIn
 from app.schemas.academics import ClassOut, SubjectOut
@@ -61,15 +59,11 @@ def get_teacher_dashboard(
             "submissions": submission_count
         })
 
-    # Get total quizzes/exams created by this teacher
-    total_quizzes = db.query(Exam).filter(Exam.CreatedByID == current_user.UserID).count()
-
     return {
         "stats": {
             "total_classes": total_classes,
             "total_subjects": total_subjects,
             "total_students": total_students,
-            "total_quizzes": total_quizzes
         },
         "recent_assignments": assignments_data
     }
@@ -212,7 +206,7 @@ def enter_grades(
         existing = db.query(Grade).filter(
             Grade.StudentID == item.student_id,
             Grade.ClassSubjectID == item.class_subject_id,
-            Grade.ExamID == item.exam_id
+            Grade.AssignmentID == item.assignment_id
         ).first()
         
         percentage = (item.marks_obtained / item.total_marks) * 100 if item.total_marks > 0 else 0
@@ -232,7 +226,7 @@ def enter_grades(
                 StudentID=item.student_id,
                 ClassSubjectID=item.class_subject_id,
                 AcademicYearID=item.academic_year_id,
-                ExamID=item.exam_id,
+                AssignmentID=item.assignment_id,
                 MarksObtained=item.marks_obtained,
                 TotalMarks=item.total_marks,
                 Percentage=percentage,
@@ -255,7 +249,7 @@ def enter_grades(
             student_id=g.StudentID,
             class_subject_id=g.ClassSubjectID,
             academic_year_id=g.AcademicYearID,
-            exam_id=g.ExamID,
+            assignment_id=g.AssignmentID,
             marks_obtained=g.MarksObtained,
             total_marks=g.TotalMarks,
             percentage=g.Percentage,
@@ -268,7 +262,7 @@ def enter_grades(
         ) for g in results
     ]
 
-@router.get("/assignments/{assignment_id}/submissions")
+@router.get("/assignments/{assignment_id}/submissions", response_model=List[AssignmentSubmissionOut])
 def get_assignment_submissions(
     assignment_id: int,
     skip: int = 0,
@@ -280,93 +274,106 @@ def get_assignment_submissions(
         AssignmentSubmission.AssignmentID == assignment_id
     ).offset(skip).limit(limit).all()
     
-    result = []
-    for s in submissions:
-        student = db.query(StudentProfile).filter(StudentProfile.UserID == s.StudentID).first()
-        result.append({
-            "submission_id": s.SubmissionID,
-            "student_id": s.StudentID,
-            "student_name": f"{student.User.FirstName} {student.User.LastName}" if student and student.User else "Unknown",
-            "submitted_at": s.SubmittedAt,
-            "file_path": s.FilePath,
-            "comments": s.Comments,
-            "status": s.Status,
-            "marks_obtained": s.MarksObtained,
-            "graded_at": s.GradedAt
-        })
-    return result
+    return [
+        AssignmentSubmissionOut(
+            submission_id=s.SubmissionID,
+            assignment_id=s.AssignmentID,
+            student_id=s.StudentID,
+            submitted_at=s.SubmittedAt,
+            file_path=s.FilePath,
+            comments=s.Comments,
+            marks_obtained=s.MarksObtained,
+            graded_by_id=s.GradedByID,
+            graded_at=s.GradedAt,
+            status=s.Status,
+            created_at=s.CreatedAt,
+            updated_at=s.UpdatedAt
+        ) for s in submissions
+    ]
 
-# --- Quizzes (MCQ) ---
 
-@router.post("/quizzes", response_model=ExamOut)
-def create_quiz(
-    quiz_data: ExamIn,
+@router.get("/submissions/{submission_id}/download")
+def download_submission_file(
+    submission_id: int,
     db: Session = Depends(get_db),
     current_user=Depends(require_teacher)
 ):
-    now = datetime.now(timezone.utc)
+    # 1. Verify submission exists
+    submission = db.query(AssignmentSubmission).filter(AssignmentSubmission.SubmissionID == submission_id).first()
+    if not submission:
+        raise HTTPException(status_code=404, detail="Submission not found")
     
-    # Create the Exam entry
-    new_exam = Exam(
-        ClassSubjectID=quiz_data.class_subject_id,
-        ExamTypeID=quiz_data.exam_type_id,
-        Title=quiz_data.title,
-        Description=quiz_data.description,
-        ExamDate=quiz_data.exam_date,
-        DurationMinutes=quiz_data.duration_minutes,
-        TotalMarks=quiz_data.total_marks,
-        PassingMarks=quiz_data.passing_marks,
-        IsOnline=True,
+    if not submission.FilePath:
+        raise HTTPException(status_code=404, detail="No file attached to this submission")
+
+    # 2. Verify teacher is authorized (teaches the subject for this assignment)
+    assignment = submission.Assignment
+    if not assignment:
+        raise HTTPException(status_code=404, detail="Assignment not found")
+
+    class_subject = db.query(ClassSubject).filter(
+        ClassSubject.ClassSubjectID == assignment.ClassSubjectID,
+        ClassSubject.TeacherID == current_user.UserID
+    ).first()
+    
+    if not class_subject:
+        raise HTTPException(status_code=403, detail="You are not authorized to access this submission")
+
+    import os
+    if not os.path.exists(submission.FilePath):
+        raise HTTPException(status_code=404, detail="File not found on server")
+
+    return FileResponse(
+        path=submission.FilePath,
+        filename=os.path.basename(submission.FilePath),
+        media_type='application/pdf'
+    )
+
+
+@router.post("/assignments", response_model=AssignmentOut)
+def create_assignment(
+    class_subject_id: int = Form(...),
+    title: str = Form(...),
+    description: str = Form(None),
+    due_date: datetime = Form(...),
+    max_marks: Decimal = Form(100.00),
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user=Depends(require_teacher)
+):
+    import os, shutil
+    upload_dir = f"uploads/teacher_assignments"
+    os.makedirs(upload_dir, exist_ok=True)
+    safe_filename = f"teacher_{current_user.UserID}_{datetime.now().timestamp()}_{file.filename}"
+    file_path = f"{upload_dir}/{safe_filename}"
+    with open(file_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+
+    now = datetime.now(timezone.utc)
+    new_assignment = Assignment(
+        ClassSubjectID=class_subject_id,
+        Title=title,
+        Description=description,
+        FilePath=file_path,
+        DueDate=due_date,
+        MaxMarks=max_marks,
         CreatedByID=current_user.UserID,
         CreatedAt=now,
         UpdatedAt=now
     )
-    db.add(new_exam)
-    db.flush() # Get the ExamID
-    
-    # Add Questions and Options
-    if quiz_data.questions:
-        for idx, q_data in enumerate(quiz_data.questions):
-            new_q = Question(
-                ExamID=new_exam.ExamID,
-                QuestionTypeID=q_data.question_type_id,
-                QuestionText=q_data.question_text,
-                QuestionOrder=idx + 1,
-                Marks=q_data.marks,
-                DifficultyLevel=q_data.difficulty_level,
-                Explanation=q_data.explanation,
-                CreatedAt=now,
-                UpdatedAt=now
-            )
-            db.add(new_q)
-            db.flush()
-            
-            if q_data.options:
-                for o_idx, o_data in enumerate(q_data.options):
-                    new_o = Option(
-                        QuestionID=new_q.QuestionID,
-                        OptionText=o_data.option_text,
-                        IsCorrect=o_data.is_correct,
-                        OptionOrder=o_idx + 1,
-                        CreatedAt=now
-                    )
-                    db.add(new_o)
-                    
+    db.add(new_assignment)
     db.commit()
-    db.refresh(new_exam)
+    db.refresh(new_assignment)
     
-    return ExamOut(
-        exam_id=new_exam.ExamID,
-        class_subject_id=new_exam.ClassSubjectID,
-        exam_type_id=new_exam.ExamTypeID,
-        title=new_exam.Title,
-        description=new_exam.Description,
-        exam_date=new_exam.ExamDate,
-        duration_minutes=new_exam.DurationMinutes,
-        total_marks=new_exam.TotalMarks,
-        passing_marks=new_exam.PassingMarks,
-        is_online=new_exam.IsOnline,
-        created_by_id=new_exam.CreatedByID,
-        created_at=new_exam.CreatedAt,
-        updated_at=new_exam.UpdatedAt
+    return AssignmentOut(
+        assignment_id=new_assignment.AssignmentID,
+        class_subject_id=new_assignment.ClassSubjectID,
+        title=new_assignment.Title,
+        description=new_assignment.Description,
+        file_path=new_assignment.FilePath,
+        due_date=new_assignment.DueDate,
+        max_marks=new_assignment.MaxMarks,
+        created_by_id=new_assignment.CreatedByID,
+        created_at=new_assignment.CreatedAt,
+        updated_at=new_assignment.UpdatedAt
     )

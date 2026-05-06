@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import academics, auth, profiles, roles, users, student, teacher, parent, admin
+from app.api import auth, profiles, roles, users, student, teacher, parent, admin, academic_v2
 from app.api.term_offerings import router as term_offerings_router
 from app.api.grade_setup import router as grade_setup_router
 from app.core.config import settings
@@ -35,7 +35,7 @@ app.include_router(auth.router, prefix=settings.api_prefix)
 app.include_router(users.router, prefix=settings.api_prefix)
 app.include_router(roles.router, prefix=settings.api_prefix)
 app.include_router(profiles.router, prefix=settings.api_prefix)
-app.include_router(academics.router, prefix=settings.api_prefix)
+app.include_router(academic_v2.router, prefix=settings.api_prefix)
 app.include_router(student.router, prefix=settings.api_prefix)
 app.include_router(teacher.router, prefix=settings.api_prefix)
 app.include_router(parent.router, prefix=settings.api_prefix)
