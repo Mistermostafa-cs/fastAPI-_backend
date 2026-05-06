@@ -58,6 +58,16 @@ def create_academic_year(
         UpdatedAt=now,
     )
     db.add(row)
+    db.flush()  # get AcademicYearID before auto-creating terms
+
+    # ── Auto-create Term 1 & Term 2 for the new year ──────────────────────
+    try:
+        from app.services.term_offering_service import create_default_terms
+        create_default_terms(db, row)
+    except Exception:
+        pass  # best-effort, don't block year creation
+    # ─────────────────────────────────────────────────────────────────────
+
     db.commit()
     db.refresh(row)
     return AcademicYearOut(

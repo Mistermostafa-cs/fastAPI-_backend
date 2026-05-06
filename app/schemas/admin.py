@@ -92,3 +92,8 @@ class ParentUpdate(BaseModel):
     occupation: Optional[str] = None
     alternate_phone: Optional[str] = None
     is_active: Optional[bool] = None
+
+class EmailBroadcastRequest(BaseModel):
+    role_name: str  # "Admin", "Teacher", "Parent", or "All"
+    subject: str
+    message: str
